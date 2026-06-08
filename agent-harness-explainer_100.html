@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Agent Harness — Click-Through Explainer</title>
+<style>
+  :root {
+    --bg: #282c34; --bg-deep: #21252b; --bg-card: #2c313a; --bg-elev: #323842;
+    --fg: #abb2bf; --fg-bright: #dcdfe4; --fg-muted: #5c6370;
+    --red: #e06c75; --orange: #d19a66; --yellow: #e5c07b;
+    --green: #98c379; --cyan: #56b6c2; --blue: #61afef; --purple: #c678dd;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    height: 100vh; overflow: hidden;
+  }
+  .mono { font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, Consolas, monospace; }
+  .icon { width: 16px; height: 16px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+
+  .stage { position: relative; height: calc(100vh - 64px); overflow: hidden; }
+  .slide {
+    display: none !important; position: absolute; inset: 0;
+    padding: 3.2rem 4.5rem; flex-direction: column; justify-content: center;
+    animation: fade 0.4s ease;
+  }
+  .slide.active { display: flex !important; }
+  .slide.origin.active { display: grid !important; grid-template-columns: minmax(280px, auto) 1fr; gap: 4rem; align-items: center; }
+  .slide.model.active  { display: grid !important; grid-template-columns: 1.15fr 1fr; gap: 3.5rem; align-items: center; }
+  @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  .kicker { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.28em; color: var(--fg-muted); text-transform: uppercase; margin-bottom: 1.4rem; }
+
+  /* Hook */
+  .hook-eq { font-size: 5.2rem; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; color: var(--fg-bright); }
+  .hook-eq .op { color: var(--fg-muted); font-weight: 500; }
+  .hook-eq .model { color: var(--fg-muted); }
+  .hook-eq .harness { color: var(--blue); position: relative; }
+  .cursor { display: inline-block; width: 0.5ch; background: var(--blue); animation: blink 1.1s steps(1) infinite; margin-left: 0.1ch; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .tagline { margin-top: 1.6rem; font-size: 1.35rem; color: var(--fg); max-width: 38ch; }
+  .tagline b { color: var(--green); font-weight: 600; }
+
+  /* Origin */
+  .bignum { font-family: 'JetBrains Mono', monospace; font-weight: 800; color: var(--purple); line-height: 0.86; }
+  .bignum .mo { display: block; font-size: 4.4rem; color: var(--fg-bright); }
+  .bignum .yr { display: block; font-size: 9rem; }
+  .satellites h2 { font-size: 2.1rem; color: var(--fg-bright); margin: 0 0 0.4rem; font-weight: 700; }
+  .satellites .sub { color: var(--fg-muted); font-size: 1.05rem; margin-bottom: 1.6rem; }
+  .sat { display: flex; gap: 0.9rem; align-items: flex-start; margin-bottom: 1.1rem; }
+  .sat .pin { color: var(--blue); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; padding-top: 0.2rem; min-width: 1.4rem; }
+  .sat p { margin: 0; font-size: 1.06rem; color: var(--fg); line-height: 1.5; }
+  .sat p b { color: var(--fg-bright); }
+  .sat p em { color: var(--yellow); font-style: normal; }
+
+  /* Mental model */
+  .model-copy h2 { font-size: 2.5rem; line-height: 1.15; color: var(--fg-bright); margin: 0 0 1.2rem; font-weight: 700; }
+  .model-copy h2 .hl { color: var(--blue); }
+  .model-copy p { font-size: 1.18rem; line-height: 1.6; max-width: 40ch; }
+  .model-copy p b { color: var(--green); font-weight: 600; }
+
+  /* Generic centered heads */
+  .head { font-size: 2.6rem; color: var(--fg-bright); font-weight: 700; margin: 0 0 0.4rem; letter-spacing: -0.01em; }
+  .head .hl { color: var(--blue); }
+  .subhead { color: var(--fg-muted); font-size: 1.1rem; margin: 0 0 2rem; }
+
+  /* Loop slide */
+  .loop-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+  pre.code { background: var(--bg-deep); border: 1px solid var(--bg-elev); border-radius: 10px; padding: 1.4rem 1.6rem; font-family: 'JetBrains Mono', monospace; font-size: 0.92rem; line-height: 1.85; overflow: auto; margin: 0; }
+  pre.code .kw { color: var(--purple); }
+  pre.code .fn { color: var(--blue); }
+  pre.code .st { color: var(--green); }
+  pre.code .cm { color: var(--fg-muted); font-style: italic; }
+  pre.code .nm { color: var(--orange); }
+  pre.code .ty { color: var(--yellow); }
+
+  /* Components grid */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; width: 100%; }
+  .card { background: var(--bg-card); border: 1px solid var(--bg-elev); border-radius: 12px; padding: 1.3rem 1.4rem; }
+  .card .ct { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; color: var(--fg-bright); font-size: 1.06rem; margin-bottom: 0.45rem; }
+  .card .ct .dot { width: 9px; height: 9px; border-radius: 2px; }
+  .card p { margin: 0; font-size: 0.92rem; line-height: 1.5; color: var(--fg); }
+  .ruleband { margin-top: 1.6rem; background: var(--bg-deep); border-left: 3px solid var(--purple); border-radius: 6px; padding: 1rem 1.3rem; font-size: 1.05rem; color: var(--fg); }
+  .ruleband b { color: var(--purple); }
+
+  /* Why it matters */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; width: 100%; margin-bottom: 1.8rem; }
+  .stat { text-align: center; }
+  .stat .big { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 3.4rem; line-height: 1; }
+  .stat .lbl { color: var(--fg-muted); font-size: 0.95rem; margin-top: 0.55rem; }
+  .why-note { font-size: 1.12rem; line-height: 1.6; max-width: 62ch; color: var(--fg); }
+  .why-note b { color: var(--fg-bright); }
+  .why-note .blue { color: var(--blue); }
+
+  /* Outro */
+  .outro { align-items: center; text-align: center; }
+  .outro .big { font-size: 4rem; font-weight: 800; color: var(--fg-bright); line-height: 1.12; letter-spacing: -0.02em; }
+  .outro .big .a { color: var(--purple); }
+  .outro .big .b { color: var(--blue); }
+  .outro .big .c { color: var(--green); }
+  .outro .cb { margin-top: 1.6rem; color: var(--fg-muted); font-family: 'JetBrains Mono', monospace; font-size: 1rem; }
+
+  /* Controls */
+  .controls { height: 64px; background: var(--bg-deep); border-top: 1px solid var(--bg-elev); padding: 0 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  .controls button { background: var(--bg-card); border: 1px solid var(--bg-elev); color: var(--fg-bright); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; padding: 0.45rem 0.85rem; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 0.45rem; }
+  .controls button:hover { background: var(--bg-elev); border-color: var(--blue); color: var(--blue); }
+  .controls button:disabled { opacity: 0.6; cursor: wait; }
+  .controls button .spin { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dots { display: flex; gap: 0.55rem; flex: 1; justify-content: center; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--fg-muted); cursor: pointer; transition: transform 0.2s; }
+  .dot.active { background: var(--blue); transform: scale(1.35); }
+
+  /* Transcript */
+  .transcript { position: fixed; top: 0; right: -460px; width: 430px; height: 100vh; background: var(--bg-deep); border-left: 1px solid var(--bg-elev); padding: 2.6rem 2rem; transition: right 0.3s ease; overflow-y: auto; z-index: 20; }
+  .transcript.open { right: 0; }
+  .transcript h3 { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fg-muted); margin: 0 0 1rem; }
+  #t-body { font-size: 1.02rem; line-height: 1.68; color: var(--fg); }
+</style>
+</head>
+<body>
+
+<!-- Icon sprite -->
+<svg width="0" height="0" style="position:absolute;">
+  <defs>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-spinner" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></symbol>
+  </defs>
+</svg>
+
+<div class="stage">
+
+  <!-- 1. HOOK -->
+  <div class="slide hook active" data-transcript="A modern AI agent is two things bolted together: a language model, and a harness. The harness is everything around the model except the model itself — the loop that runs it, the tools it can call, the memory and context it carries, and the guardrails that keep it on track. A common shorthand captures it: Agent = Model + Harness. The punchline most practitioners now repeat is that the model is the smallest part of the system; the harness is where most of the engineering — and most of the difference between a demo and a product — actually lives.">
+    <div class="kicker">// click-through · agent harness</div>
+    <div class="hook-eq">Agent <span class="op">=</span> <span class="model">Model</span> <span class="op">+</span> <span class="harness">Harness</span><span class="cursor">&nbsp;</span></div>
+    <div class="tagline">The harness is everything around the model <b>except the model itself</b> — and it's where the real work lives.</div>
+  </div>
+
+  <!-- 2. ORIGIN -->
+  <div class="slide origin" data-transcript="The idea of wrapping a model in scaffolding is older than the name — Anthropic published 'Effective Harnesses for Long-Running Agents' in November 2025, and practitioners had been building these systems informally for years. But the term crystallized in February 2026. On February 5, HashiCorp co-founder and Terraform creator Mitchell Hashimoto published 'My AI Adoption Journey,' which included a section titled 'Engineer the Harness' describing his practice: every time an agent makes a mistake, engineer a permanent fix into its environment so that mistake becomes structurally impossible to repeat. Days later, on February 11, OpenAI published a field report using the same vocabulary. The word borrows from horse tack — the reins, saddle, and bit that channel a powerful animal's energy in a useful direction.">
+    <div class="bignum"><span class="mo">FEB</span><span class="yr">2026</span></div>
+    <div class="satellites">
+      <h2>The year it got a name</h2>
+      <div class="sub">The concept predates it — but the vocabulary arrived fast.</div>
+      <div class="sat"><div class="pin mono">who</div><p><b>Mitchell Hashimoto</b> — co-founder of HashiCorp, creator of Terraform — named the practice <em>"Engineer the Harness"</em> in a Feb 5 blog post.</p></div>
+      <div class="sat"><div class="pin mono">then</div><p>Days later, <b>OpenAI</b> shipped a field report using the same term — and the word stuck across the industry.</p></div>
+      <div class="sat"><div class="pin mono">root</div><p>"Harness" borrows from <em>horse tack</em>: the reins, saddle, and bit that steer raw power somewhere useful.</p></div>
+    </div>
+  </div>
+
+  <!-- 3. MENTAL MODEL -->
+  <div class="slide model" data-transcript="Here's the mental model. The model is the engine — raw, powerful, and on its own, undirected. The harness is everything that turns that horsepower into a vehicle that actually goes where you point it: the steering, the brakes, the dashboard, the fuel line. Strip the harness away and you still have a brilliant text generator, but it can't touch a file, remember yesterday, or stop itself from driving into a wall. Wrap it in a good harness and the same model becomes an agent that ships work. The model thinks; the harness lets it act.">
+    <div class="mm-diagram">
+      <svg viewBox="0 0 420 360" width="100%" style="max-height:62vh">
+        <!-- harness frame -->
+        <rect x="20" y="20" width="380" height="320" rx="18" fill="#2c313a" stroke="#61afef" stroke-width="2" stroke-dasharray="7 6"/>
+        <text x="210" y="48" text-anchor="middle" fill="#61afef" font-family="'JetBrains Mono',monospace" font-size="14" letter-spacing="2">HARNESS</text>
+        <!-- model core -->
+        <circle cx="210" cy="195" r="62" fill="#21252b" stroke="#c678dd" stroke-width="2.5"/>
+        <text x="210" y="190" text-anchor="middle" fill="#dcdfe4" font-family="-apple-system,sans-serif" font-size="20" font-weight="700">MODEL</text>
+        <text x="210" y="212" text-anchor="middle" fill="#5c6370" font-family="'JetBrains Mono',monospace" font-size="11">the engine</text>
+        <!-- satellite components -->
+        <g font-family="'JetBrains Mono',monospace" font-size="12.5" text-anchor="middle">
+          <rect x="58" y="78" width="92" height="34" rx="8" fill="#323842"/><text x="104" y="100" fill="#98c379">tools</text>
+          <rect x="270" y="78" width="92" height="34" rx="8" fill="#323842"/><text x="316" y="100" fill="#e5c07b">memory</text>
+          <rect x="48" y="278" width="104" height="34" rx="8" fill="#323842"/><text x="100" y="300" fill="#d19a66">the loop</text>
+          <rect x="268" y="278" width="104" height="34" rx="8" fill="#323842"/><text x="320" y="300" fill="#e06c75">guardrails</text>
+        </g>
+        <!-- connectors -->
+        <g stroke="#5c6370" stroke-width="1.5" fill="none">
+          <line x1="120" y1="112" x2="170" y2="158"/>
+          <line x1="300" y1="112" x2="250" y2="158"/>
+          <line x1="120" y1="278" x2="170" y2="232"/>
+          <line x1="300" y1="278" x2="250" y2="232"/>
+        </g>
+      </svg>
+    </div>
+    <div class="model-copy">
+      <h2>The model is the engine.<br>The harness is <span class="hl">the car.</span></h2>
+      <p>Raw, a model is brilliant but undirected — it can't touch a file, recall yesterday, or stop itself. The harness adds the <b>steering, the memory, and the brakes.</b> Same engine, suddenly it ships.</p>
+    </div>
+  </div>
+
+  <!-- 4. MECHANIC — THE LOOP -->
+  <div class="slide loop" data-transcript="Under the hood, an agent runs a loop — most commonly the ReAct pattern (Reason + Act), introduced by Yao and colleagues in 2022. The model receives a task, reasons about what to do, issues a tool call — read a file, run a command, hit an API — observes the result, then reasons again. That cycle repeats until the task is done. Crucially, the model never touches the outside world directly. The harness owns the loop: it holds the LLM API connection, registers which tools exist, dispatches each call, feeds results back, and decides how much history still fits in the context window. The model proposes one step at a time; the harness is what actually runs the show.">
+    <div class="kicker">// the mechanic · the loop</div>
+    <h2 class="head">It runs a <span class="hl">loop</span>.</h2>
+    <p class="subhead">Reason → Act → Observe → repeat. The harness owns every turn of it.</p>
+    <div class="loop-wrap">
+      <svg viewBox="0 0 320 300" width="100%" style="max-height:46vh">
+        <defs>
+          <marker id="arr" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#61afef"/></marker>
+        </defs>
+        <!-- nodes -->
+        <g font-family="-apple-system,sans-serif" font-size="14" font-weight="600" text-anchor="middle">
+          <circle cx="160" cy="48" r="40" fill="#2c313a" stroke="#c678dd" stroke-width="2"/><text x="160" y="53" fill="#c678dd">Reason</text>
+          <circle cx="262" cy="180" r="40" fill="#2c313a" stroke="#98c379" stroke-width="2"/><text x="262" y="185" fill="#98c379">Act</text>
+          <circle cx="58" cy="180" r="40" fill="#2c313a" stroke="#e5c07b" stroke-width="2"/><text x="58" y="185" fill="#e5c07b">Observe</text>
+        </g>
+        <!-- arcs -->
+        <g fill="none" stroke="#61afef" stroke-width="2" marker-end="url(#arr)">
+          <path d="M196,68 A120 120 0 0 1 244 142"/>
+          <path d="M226,206 A120 120 0 0 1 96 210"/>
+          <path d="M70,142 A120 120 0 0 1 122 70"/>
+        </g>
+        <text x="160" y="180" text-anchor="middle" fill="#5c6370" font-family="'JetBrains Mono',monospace" font-size="11">until done</text>
+      </svg>
+      <pre class="code"><span class="cm"># the harness, not the model, runs this</span>
+<span class="kw">while</span> <span class="kw">not</span> task.<span class="fn">done</span>():
+    step  = model.<span class="fn">reason</span>(context)
+    <span class="kw">if</span> step.<span class="nm">tool_call</span>:
+        result = harness.<span class="fn">dispatch</span>(step)
+        context.<span class="fn">add</span>(result)   <span class="cm"># observe</span>
+    context = harness.<span class="fn">fit</span>(context) <span class="cm"># trim</span></pre>
+    </div>
+  </div>
+
+  <!-- 5. MECHANIC — WHAT'S INSIDE -->
+  <div class="slide inside" data-transcript="So what's actually in a harness? Practitioners converge on roughly six recurring parts: orchestration and tool use (the loop plus the dispatcher), memory, state and persistence so the agent isn't blind every session, security and governance guardrails, observability so it can see logs and metrics, and evals to measure whether it's getting better. A useful split, from Birgitta Böckeler's analysis on Martin Fowler's site, is guides versus sensors — feedforward controls that steer the agent before it acts, like a CLAUDE.md or AGENTS.md instruction file, and feedback controls that let it self-correct after, like a linter whose error messages are written for the model to read. Tying it together is Hashimoto's rule: when the agent makes a mistake, don't just retry the prompt — engineer the environment so that mistake can't happen again.">
+    <div class="kicker">// the mechanic · what's inside</div>
+    <h2 class="head">Six parts, two jobs.</h2>
+    <p class="subhead">Guides steer it <span style="color:var(--cyan)">before</span> it acts. Sensors catch it <span style="color:var(--cyan)">after</span>.</p>
+    <div class="grid">
+      <div class="card"><div class="ct"><span class="dot" style="background:var(--orange)"></span>Orchestration + tools</div><p>The loop and the dispatcher — what the agent can call, and when.</p></div>
+      <div class="card"><div class="ct"><span class="dot" style="background:var(--yellow)"></span>Memory + state</div><p>Persistence so the agent isn't blind at the start of every session.</p></div>
+      <div class="card"><div class="ct"><span class="dot" style="background:var(--red)"></span>Security + governance</div><p>Guardrails that block unsafe actions before they ever run.</p></div>
+      <div class="card"><div class="ct"><span class="dot" style="background:var(--green)"></span>Observability</div><p>Logs and metrics the agent can read to debug its own work.</p></div>
+      <div class="card"><div class="ct"><span class="dot" style="background:var(--blue)"></span>Evals</div><p>Measurement — is the agent actually getting better, or just busy?</p></div>
+      <div class="card"><div class="ct"><span class="dot" style="background:var(--purple)"></span>Instruction files</div><p>CLAUDE.md / AGENTS.md — the rules the agent reads before it starts.</p></div>
+    </div>
+    <div class="ruleband"><b>Hashimoto's rule:</b> when the agent errs, don't re-prompt — re-engineer the environment so that mistake becomes impossible.</div>
+  </div>
+
+  <!-- 6. WHY IT MATTERS -->
+  <div class="slide why" data-transcript="Why does any of this matter? In February 2026, OpenAI's Frontier Product Exploration team, led by Ryan Lopopolo, reported a five-month experiment starting in August 2025: build and ship a real internal product under one hard rule — humans write zero code. The result was roughly a million lines of code across about 1,500 merged pull requests, all authored by Codex agents, by a team that started at three engineers and grew to seven, averaging 3.5 PRs per engineer per day. The lever wasn't a smarter model — it was the harness around it. MongoDB's analysis makes the scale vivid: a weekend chatbot is about one line of glue code per token the model produces, while a governed agent platform is closer to fifty lines per token, most of which have nothing to do with the model. And one widely-cited experiment improved fifteen different LLMs at coding in an afternoon by changing only the harness. Same models. Better scaffolding.">
+    <div class="kicker">// why it matters</div>
+    <div class="stats">
+      <div class="stat"><div class="big" style="color:var(--green)">~1M</div><div class="lbl">lines of code shipped</div></div>
+      <div class="stat"><div class="big" style="color:var(--blue)">0</div><div class="lbl">written by hand</div></div>
+      <div class="stat"><div class="big" style="color:var(--orange)">~1,500</div><div class="lbl">PRs, all agent-authored</div></div>
+    </div>
+    <p class="why-note">OpenAI's Codex team built a real product in five months under one rule — <b>humans write no code</b> — with three-to-seven engineers steering agents. The lever wasn't a smarter model; it was the harness. One analysis pegs a chatbot at <span class="blue">~1 line of glue per token</span> and a governed agent platform at <span class="blue">~50</span> — and most of it has nothing to do with the model.</p>
+  </div>
+
+  <!-- 7. OUTRO -->
+  <div class="slide outro" data-transcript="And that's the agent harness. The model is the part everyone talks about, but it's the smallest piece of the system — swap it out and the harness still does the heavy lifting. Same model, different harness, different agent. The model thinks. The harness ships.">
+    <div class="kicker">// and that's it</div>
+    <div class="big"><span class="a">Same model.</span> <span class="b">Different harness.</span><br><span class="c">Different agent.</span></div>
+    <div class="cb">// the model thinks — the harness ships.</div>
+  </div>
+
+</div>
+
+<div class="controls">
+  <button onclick="prev()"><svg class="icon"><use href="#i-arrow-left"/></svg> prev</button>
+  <div class="dots" id="dots"></div>
+  <button onclick="next()">next <svg class="icon"><use href="#i-arrow-right"/></svg></button>
+  <button onclick="toggleTranscript()"><svg class="icon"><use href="#i-doc"/></svg> transcript</button>
+  <button onclick="downloadPptx(this)"><svg class="icon"><use href="#i-download"/></svg> .pptx</button>
+</div>
+
+<div class="transcript" id="transcript">
+  <button onclick="toggleTranscript()" aria-label="Close" style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--fg-muted);cursor:pointer;">
+    <svg class="icon"><use href="#i-x"/></svg>
+  </button>
+  <h3>Transcript</h3>
+  <div id="t-body"></div>
+</div>
+
+<script>
+  let current = 0;
+  const slides = document.querySelectorAll('.slide');
+  const dotsContainer = document.getElementById('dots');
+  const tBody = document.getElementById('t-body');
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsContainer.appendChild(d);
+  });
+  function goTo(i) {
+    slides[current].classList.remove('active');
+    document.querySelectorAll('.dot')[current].classList.remove('active');
+    current = (i + slides.length) % slides.length;
+    slides[current].classList.add('active');
+    document.querySelectorAll('.dot')[current].classList.add('active');
+    tBody.textContent = slides[current].dataset.transcript;
+  }
+  function next() { goTo(current + 1); }
+  function prev() { goTo(current - 1); }
+  function toggleTranscript() { document.getElementById('transcript').classList.toggle('open'); }
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowRight') next();
+    if (e.key === 'ArrowLeft') prev();
+    if (e.key === 't' || e.key === 'T') toggleTranscript();
+  });
+  tBody.textContent = slides[0].dataset.transcript;
+
+  /* ---------- .pptx export ---------- */
+  let pptxLib = null;
+  function loadPptxGen() {
+    if (pptxLib) return Promise.resolve(pptxLib);
+    if (window.PptxGenJS) { pptxLib = window.PptxGenJS; return Promise.resolve(pptxLib); }
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+      s.onload = () => { pptxLib = window.PptxGenJS; resolve(pptxLib); };
+      s.onerror = () => reject(new Error('Failed to load PptxGenJS — check your internet connection.'));
+      document.head.appendChild(s);
+    });
+  }
+  const t = i => slides[i].dataset.transcript;
+
+  async function downloadPptx(btn) {
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="icon spin"><use href="#i-spinner"/></svg> building…';
+    try {
+      const PptxGen = await loadPptxGen();
+      const pres = new PptxGen();
+      pres.layout = 'LAYOUT_WIDE';
+      pres.title = 'Agent Harness';
+      const W = 13.333, H = 7.5;
+      const C = {
+        bg: '282C34', deep: '21252B', card: '2C313A', elev: '323842',
+        fg: 'ABB2BF', fgB: 'DCDFE4', fgM: '5C6370',
+        red: 'E06C75', orange: 'D19A66', yellow: 'E5C07B',
+        green: '98C379', cyan: '56B6C2', blue: '61AFEF', purple: 'C678DD'
+      };
+      const MONO = 'Consolas', SANS = 'Calibri';
+      const addSlide = (tr) => {
+        const s = pres.addSlide();
+        s.background = { color: C.bg };
+        if (tr) s.addNotes(tr);
+        return s;
+      };
+      const kicker = (s, txt) => s.addText(txt, { x: 0.6, y: 0.45, w: 8, h: 0.35, fontFace: MONO, fontSize: 11, color: C.fgM, charSpacing: 3 });
+
+      // 1. HOOK
+      {
+        const s = addSlide(t(0));
+        kicker(s, '// CLICK-THROUGH · AGENT HARNESS');
+        s.addText([
+          { text: 'Agent ', options: { color: C.fgB } },
+          { text: '= ', options: { color: C.fgM } },
+          { text: 'Model ', options: { color: C.fgM } },
+          { text: '+ ', options: { color: C.fgM } },
+          { text: 'Harness', options: { color: C.blue } }
+        ], { x: 0.6, y: 2.4, w: 12, h: 1.5, fontFace: SANS, fontSize: 60, bold: true });
+        s.addText([
+          { text: 'The harness is everything around the model ' , options: { color: C.fg } },
+          { text: 'except the model itself', options: { color: C.green, bold: true } },
+          { text: ' — and it\u2019s where the real work lives.', options: { color: C.fg } }
+        ], { x: 0.6, y: 4.1, w: 9.5, h: 1.2, fontFace: SANS, fontSize: 22 });
+      }
+
+      // 2. ORIGIN
+      {
+        const s = addSlide(t(1));
+        s.addText('FEB', { x: 0.6, y: 1.6, w: 4, h: 0.9, fontFace: MONO, fontSize: 40, bold: true, color: C.fgB });
+        s.addText('2026', { x: 0.5, y: 2.3, w: 4.2, h: 2.2, fontFace: MONO, fontSize: 96, bold: true, color: C.purple });
+        s.addText('The year it got a name', { x: 5.1, y: 1.3, w: 7.6, h: 0.7, fontFace: SANS, fontSize: 30, bold: true, color: C.fgB });
+        s.addText('The concept predates it — but the vocabulary arrived fast.', { x: 5.1, y: 2.0, w: 7.6, h: 0.5, fontFace: SANS, fontSize: 14, color: C.fgM });
+        const sat = (y, pin, rich) => {
+          s.addText(pin, { x: 5.1, y, w: 0.9, h: 0.4, fontFace: MONO, fontSize: 12, color: C.blue });
+          s.addText(rich, { x: 6.05, y: y - 0.05, w: 6.7, h: 0.95, fontFace: SANS, fontSize: 15, color: C.fg });
+        };
+        sat(2.85, 'who', [
+          { text: 'Mitchell Hashimoto', options: { color: C.fgB, bold: true } },
+          { text: ' — HashiCorp co-founder, Terraform creator — named the practice ', options: { color: C.fg } },
+          { text: '\u201CEngineer the Harness\u201D', options: { color: C.yellow } },
+          { text: ' on Feb 5.', options: { color: C.fg } }
+        ]);
+        sat(4.0, 'then', [
+          { text: 'Days later, ', options: { color: C.fg } },
+          { text: 'OpenAI', options: { color: C.fgB, bold: true } },
+          { text: ' shipped a field report using the same term — and it stuck.', options: { color: C.fg } }
+        ]);
+        sat(5.15, 'root', [
+          { text: '\u201CHarness\u201D borrows from ', options: { color: C.fg } },
+          { text: 'horse tack', options: { color: C.yellow } },
+          { text: ': reins, saddle, bit — steering raw power somewhere useful.', options: { color: C.fg } }
+        ]);
+      }
+
+      // 3. MENTAL MODEL
+      {
+        const s = addSlide(t(2));
+        // diagram
+        s.addShape(pres.ShapeType.roundRect, { x: 0.7, y: 1.4, w: 5.4, h: 4.7, fill: { color: C.card }, line: { color: C.blue, width: 1.5, dashType: 'dash' }, rectRadius: 0.2 });
+        s.addText('HARNESS', { x: 0.7, y: 1.55, w: 5.4, h: 0.4, align: 'center', fontFace: MONO, fontSize: 12, color: C.blue, charSpacing: 3 });
+        s.addShape(pres.ShapeType.ellipse, { x: 2.65, y: 3.0, w: 1.5, h: 1.5, fill: { color: C.deep }, line: { color: C.purple, width: 2 } });
+        s.addText([{ text: 'MODEL\n', options: { color: C.fgB, bold: true, fontSize: 16 } }, { text: 'the engine', options: { color: C.fgM, fontFace: MONO, fontSize: 10 } }], { x: 2.65, y: 3.2, w: 1.5, h: 1.1, align: 'center', fontFace: SANS });
+        const chip = (x, y, txt, col) => {
+          s.addShape(pres.ShapeType.roundRect, { x, y, w: 1.5, h: 0.5, fill: { color: C.elev }, rectRadius: 0.08 });
+          s.addText(txt, { x, y, w: 1.5, h: 0.5, align: 'center', valign: 'middle', fontFace: MONO, fontSize: 12, color: col });
+        };
+        chip(1.0, 1.95, 'tools', C.green);
+        chip(3.85, 1.95, 'memory', C.yellow);
+        chip(1.0, 5.4, 'the loop', C.orange);
+        chip(3.85, 5.4, 'guardrails', C.red);
+        // copy
+        s.addText([
+          { text: 'The model is the engine.\n', options: { color: C.fgB } },
+          { text: 'The harness is the car.', options: { color: C.blue } }
+        ], { x: 6.7, y: 2.3, w: 6, h: 1.6, fontFace: SANS, fontSize: 30, bold: true });
+        s.addText([
+          { text: 'Raw, a model is brilliant but undirected. The harness adds the ', options: { color: C.fg } },
+          { text: 'steering, the memory, and the brakes.', options: { color: C.green, bold: true } },
+          { text: ' Same engine, suddenly it ships.', options: { color: C.fg } }
+        ], { x: 6.7, y: 4.1, w: 5.9, h: 1.6, fontFace: SANS, fontSize: 18 });
+      }
+
+      // 4. LOOP
+      {
+        const s = addSlide(t(3));
+        kicker(s, '// THE MECHANIC · THE LOOP');
+        s.addText([{ text: 'It runs a ', options: { color: C.fgB } }, { text: 'loop', options: { color: C.blue } }, { text: '.', options: { color: C.fgB } }], { x: 0.6, y: 1.0, w: 8, h: 0.8, fontFace: SANS, fontSize: 30, bold: true });
+        s.addText('Reason \u2192 Act \u2192 Observe \u2192 repeat. The harness owns every turn of it.', { x: 0.6, y: 1.75, w: 9, h: 0.5, fontFace: SANS, fontSize: 15, color: C.fgM });
+        // loop nodes
+        const node = (cx, cy, label, col) => {
+          s.addShape(pres.ShapeType.ellipse, { x: cx - 0.7, y: cy - 0.7, w: 1.4, h: 1.4, fill: { color: C.card }, line: { color: col, width: 2 } });
+          s.addText(label, { x: cx - 0.7, y: cy - 0.7, w: 1.4, h: 1.4, align: 'center', valign: 'middle', fontFace: SANS, fontSize: 14, bold: true, color: col });
+        };
+        node(3.0, 3.0, 'Reason', C.purple);
+        node(4.4, 5.0, 'Act', C.green);
+        node(1.6, 5.0, 'Observe', C.yellow);
+        s.addText('until done', { x: 2.3, y: 4.4, w: 1.4, h: 0.4, align: 'center', fontFace: MONO, fontSize: 10, color: C.fgM });
+        // code
+        s.addShape(pres.ShapeType.roundRect, { x: 6.7, y: 2.7, w: 6, h: 3.1, fill: { color: C.deep }, line: { color: C.elev, width: 1 }, rectRadius: 0.12 });
+        s.addText([
+          { text: '# the harness, not the model, runs this\n', options: { color: C.fgM, italic: true } },
+          { text: 'while ', options: { color: C.purple } }, { text: 'not ', options: { color: C.purple } }, { text: 'task.', options: { color: C.fg } }, { text: 'done', options: { color: C.blue } }, { text: '():\n', options: { color: C.fg } },
+          { text: '    step  = model.', options: { color: C.fg } }, { text: 'reason', options: { color: C.blue } }, { text: '(context)\n', options: { color: C.fg } },
+          { text: '    if ', options: { color: C.purple } }, { text: 'step.', options: { color: C.fg } }, { text: 'tool_call', options: { color: C.orange } }, { text: ':\n', options: { color: C.fg } },
+          { text: '        r = harness.', options: { color: C.fg } }, { text: 'dispatch', options: { color: C.blue } }, { text: '(step)\n', options: { color: C.fg } },
+          { text: '        context.', options: { color: C.fg } }, { text: 'add', options: { color: C.blue } }, { text: '(r)  # observe\n', options: { color: C.fg } },
+          { text: '    context = harness.', options: { color: C.fg } }, { text: 'fit', options: { color: C.blue } }, { text: '(context)', options: { color: C.fg } }
+        ], { x: 7.0, y: 2.9, w: 5.5, h: 2.7, fontFace: MONO, fontSize: 13, lineSpacingMultiple: 1.25 });
+      }
+
+      // 5. INSIDE
+      {
+        const s = addSlide(t(4));
+        kicker(s, '// THE MECHANIC · WHAT\u2019S INSIDE');
+        s.addText('Six parts, two jobs.', { x: 0.6, y: 1.0, w: 9, h: 0.8, fontFace: SANS, fontSize: 30, bold: true, color: C.fgB });
+        s.addText([
+          { text: 'Guides steer it ', options: { color: C.fgM } }, { text: 'before', options: { color: C.cyan } },
+          { text: ' it acts. Sensors catch it ', options: { color: C.fgM } }, { text: 'after', options: { color: C.cyan } }, { text: '.', options: { color: C.fgM } }
+        ], { x: 0.6, y: 1.75, w: 10, h: 0.5, fontFace: SANS, fontSize: 15 });
+        const cards = [
+          ['Orchestration + tools', 'The loop and the dispatcher — what the agent can call, and when.', C.orange],
+          ['Memory + state', 'Persistence so the agent isn\u2019t blind at the start of every session.', C.yellow],
+          ['Security + governance', 'Guardrails that block unsafe actions before they ever run.', C.red],
+          ['Observability', 'Logs and metrics the agent can read to debug its own work.', C.green],
+          ['Evals', 'Measurement — is the agent getting better, or just busy?', C.blue],
+          ['Instruction files', 'CLAUDE.md / AGENTS.md — the rules it reads before it starts.', C.purple]
+        ];
+        const cw = 3.85, ch = 1.25, gx = 0.25, gy = 0.22, x0 = 0.6, y0 = 2.45;
+        cards.forEach((c, i) => {
+          const col = i % 3, row = Math.floor(i / 3);
+          const x = x0 + col * (cw + gx), y = y0 + row * (ch + gy);
+          s.addShape(pres.ShapeType.roundRect, { x, y, w: cw, h: ch, fill: { color: C.card }, line: { color: C.elev, width: 1 }, rectRadius: 0.1 });
+          s.addShape(pres.ShapeType.roundRect, { x: x + 0.18, y: y + 0.22, w: 0.13, h: 0.13, fill: { color: c[2] }, rectRadius: 0.02 });
+          s.addText(c[0], { x: x + 0.4, y: y + 0.12, w: cw - 0.5, h: 0.35, fontFace: SANS, fontSize: 14, bold: true, color: C.fgB });
+          s.addText(c[1], { x: x + 0.18, y: y + 0.5, w: cw - 0.36, h: 0.65, fontFace: SANS, fontSize: 11.5, color: C.fg });
+        });
+        s.addShape(pres.ShapeType.roundRect, { x: 0.6, y: 5.9, w: 12.1, h: 0.85, fill: { color: C.deep }, rectRadius: 0.06 });
+        s.addShape(pres.ShapeType.rect, { x: 0.6, y: 5.9, w: 0.06, h: 0.85, fill: { color: C.purple } });
+        s.addText([
+          { text: 'Hashimoto\u2019s rule: ', options: { color: C.purple, bold: true } },
+          { text: 'when the agent errs, don\u2019t re-prompt — re-engineer the environment so that mistake becomes impossible.', options: { color: C.fg } }
+        ], { x: 0.95, y: 5.9, w: 11.6, h: 0.85, valign: 'middle', fontFace: SANS, fontSize: 15 });
+      }
+
+      // 6. WHY
+      {
+        const s = addSlide(t(5));
+        kicker(s, '// WHY IT MATTERS');
+        const stat = (x, big, col, lbl) => {
+          s.addText(big, { x, y: 1.5, w: 3.8, h: 1.1, align: 'center', fontFace: MONO, fontSize: 48, bold: true, color: col });
+          s.addText(lbl, { x, y: 2.65, w: 3.8, h: 0.5, align: 'center', fontFace: SANS, fontSize: 14, color: C.fgM });
+        };
+        stat(0.7, '~1M', C.green, 'lines of code shipped');
+        stat(4.75, '0', C.blue, 'written by hand');
+        stat(8.8, '~1,500', C.orange, 'PRs, all agent-authored');
+        s.addText([
+          { text: 'OpenAI\u2019s Codex team built a real product in five months under one rule — ', options: { color: C.fg } },
+          { text: 'humans write no code', options: { color: C.fgB, bold: true } },
+          { text: ' — with three-to-seven engineers steering agents. The lever wasn\u2019t a smarter model; it was the harness. One analysis pegs a chatbot at ', options: { color: C.fg } },
+          { text: '~1 line of glue per token', options: { color: C.blue } },
+          { text: ' and a governed agent platform at ', options: { color: C.fg } },
+          { text: '~50', options: { color: C.blue } },
+          { text: ' — most of it nothing to do with the model.', options: { color: C.fg } }
+        ], { x: 0.9, y: 3.7, w: 11.5, h: 2.5, fontFace: SANS, fontSize: 20, lineSpacingMultiple: 1.3 });
+      }
+
+      // 7. OUTRO
+      {
+        const s = addSlide(t(6));
+        s.addText('// AND THAT\u2019S IT', { x: 0, y: 2.0, w: W, h: 0.4, align: 'center', fontFace: MONO, fontSize: 12, color: C.fgM, charSpacing: 3 });
+        s.addText([
+          { text: 'Same model. ', options: { color: C.purple } },
+          { text: 'Different harness.\n', options: { color: C.blue } },
+          { text: 'Different agent.', options: { color: C.green } }
+        ], { x: 0, y: 2.7, w: W, h: 2, align: 'center', fontFace: SANS, fontSize: 44, bold: true });
+        s.addText('// the model thinks — the harness ships.', { x: 0, y: 5.0, w: W, h: 0.5, align: 'center', fontFace: MONO, fontSize: 14, color: C.fgM });
+      }
+
+      await pres.writeFile({ fileName: 'agent-harness.pptx' });
+    } catch (err) {
+      console.error(err);
+      alert('Sorry — could not generate the .pptx. ' + (err.message || ''));
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  }
+</script>
+</body>
+</html>
